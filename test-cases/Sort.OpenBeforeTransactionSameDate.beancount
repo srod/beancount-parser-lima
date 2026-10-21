@@ -1,6 +1,0 @@
-2024-01-01 * "Opening transaction"
-  Assets:Cash   100 USD
-  Income:Misc
-
-2024-01-01 open Assets:Cash
-2024-01-01 open Income:Misc

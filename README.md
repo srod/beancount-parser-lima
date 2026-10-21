@@ -99,7 +99,7 @@ Licensed under either of
 
 at your option.
 
-The [Beancount protobuf files](protobuf), which were extracted from the original Beancount repo and are used here only for testing, are licensed under GPLv2.
+This fork removes the Beancount protobuf files (GPLv2) and the parser test cases derived from Beancount's own tests, together with the test harness and build script that used them. Everything left is MIT OR Apache-2.0.
 
 ## Contribution
 
