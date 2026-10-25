@@ -85,7 +85,6 @@
 use chumsky::prelude::{Input, Parser};
 use lexer::{lex, Token};
 use parsers::{file, ParserState};
-use sort::SortIteratorAdaptor;
 use std::{
     collections::{HashMap, VecDeque},
     path::{Path, PathBuf},
@@ -241,19 +240,18 @@ impl<'s> BeancountParser<'s> {
         // directives are stable-sorted by date, with a secondary key enforcing the stream
         // invariants from https://beancount.github.io/docs/beancount_design_doc.html#stream-invariants:
         // Open sorts before Transaction; Balance sorts before Transaction.
-        let directives = p
-            .by_ref()
-            .sort(|d| {
-                (
-                    *d.item().date().item(),
-                    match d.variant() {
-                        DirectiveVariant::Open(_) => 0u8,
-                        DirectiveVariant::Balance(_) => 1u8,
-                        _ => 2u8,
-                    },
-                )
-            })
-            .collect::<Vec<_>>();
+        let mut directives = Vec::with_capacity(p.pending_declarations());
+        directives.extend(p.by_ref());
+        sort::sort_stable_in_place(&mut directives, |d| {
+            (
+                *d.item().date().item(),
+                match d.variant() {
+                    DirectiveVariant::Open(_) => 0u8,
+                    DirectiveVariant::Balance(_) => 1u8,
+                    _ => 2u8,
+                },
+            )
+        });
         let (options, plugins, mut pragma_errors, mut pragma_warnings) = p.result();
         errors.append(&mut pragma_errors);
         warnings.append(&mut pragma_warnings);
@@ -401,6 +399,13 @@ impl<'s> PragmaProcessor<'s> {
             errors: Vec::new(),
             warnings: Vec::new(),
         }
+    }
+
+    /// How many declarations are still to come: at least as many as there will be directives.
+    fn pending_declarations(&self) -> usize {
+        self.current_declarations.len()
+            + self.stacked.iter().map(|(_, d)| d.len()).sum::<usize>()
+            + self.remaining.values().map(|d| d.len()).sum::<usize>()
     }
 
     fn result(self) -> (Options<'s>, Vec<Plugin<'s>>, Vec<Error>, Vec<Warning>) {
