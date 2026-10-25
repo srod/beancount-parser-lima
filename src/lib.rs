@@ -120,6 +120,12 @@ fn get_includes(content: &str, source_id: SourceId) -> Vec<String> {
             .unwrap_or_default()
     }
 
+    // Only an `include` token starts an include, so text without the word has none, and lexing
+    // all of it just to find that out would hold a token for every few bytes of it.
+    if !content.contains("include") {
+        return Vec::new();
+    }
+
     let tokens = lex_with_source(source_id, content);
     get_includes_for_tokens(tokens, source_id, end_of_input(source_id, content))
 }

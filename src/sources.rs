@@ -9,6 +9,7 @@ use std::{
     io::{self, Read, Write},
     iter::once,
     path::{Path, PathBuf},
+    sync::OnceLock,
 };
 
 pub use crate::{trim::trim_trailing_whitespace, types::*};
@@ -35,7 +36,8 @@ pub struct BeancountSources {
     root_path: Option<PathBuf>,
     root_source_id: SourceId,
     root_content: String,
-    root_content_char_indices: Vec<usize>,
+    // built on first use: only error reports need it, and it costs 8 bytes per character
+    root_content_char_indices: OnceLock<Vec<usize>>,
     included_globs: HashMap<PathBuf, IncludedGlob>,
     included_content: HashMap<PathBuf, IncludedSource>,
     source_id_strings: Vec<String>, // indexed by SourceId
@@ -43,7 +45,7 @@ pub struct BeancountSources {
 
 #[derive(Clone, Debug)]
 enum IncludedSource {
-    Content(SourceId, String, Vec<usize>), // the content and its char indices
+    Content(SourceId, String, OnceLock<Vec<usize>>), // the content and its char indices, built on first use
     Error(String),
     Duplicate,
 }
@@ -129,14 +131,13 @@ impl BeancountSources {
                                                 ))
                                             },
                                             |c| {
-                                                // find the char indices for the content
-                                                // needed for mapping byte indices to char indices, to convert Chumsky spans to Ariadne spans
+                                                // the char indices are needed for mapping byte indices to char indices, to convert Chumsky spans to Ariadne spans
                                                 // see https://github.com/zesterer/chumsky/issues/65#issuecomment-1689216633
-                                                let char_indices = c
-                                                    .char_indices()
-                                                    .map(|(i, _)| i)
-                                                    .collect::<Vec<_>>();
-                                                IncludedSource::Content(source_id, c, char_indices)
+                                                IncludedSource::Content(
+                                                    source_id,
+                                                    c,
+                                                    OnceLock::new(),
+                                                )
                                             },
                                         );
 
@@ -172,16 +173,11 @@ impl BeancountSources {
             }
         }
 
-        let root_content_char_indices = root_content
-            .char_indices()
-            .map(|(i, _)| i)
-            .collect::<Vec<_>>();
-
         Self {
             root_path,
             root_source_id,
             root_content,
-            root_content_char_indices,
+            root_content_char_indices: OnceLock::new(),
             included_globs,
             included_content,
             source_id_strings,
@@ -306,19 +302,27 @@ impl BeancountSources {
         };
         let source_id = safe_span.source.into();
         let source_id_str = self.source_id_string(source_id);
-        let empty_char_indices = Vec::default();
         let (source_content, source_content_char_indices) = if source_id == self.root_source_id {
-            (self.root_content.as_str(), &self.root_content_char_indices)
+            (
+                self.root_content.as_str(),
+                Some(&self.root_content_char_indices),
+            )
         } else if let IncludedSource::Content(_, content, content_char_indices) =
             self.included_content.get(Path::new(source_id_str)).unwrap()
         {
-            (content.as_str(), content_char_indices)
+            (content.as_str(), Some(content_char_indices))
         } else {
-            ("", &empty_char_indices)
+            ("", None)
         };
 
         let byte_span = trimmed_span(source_content, safe_span);
-        let rune_span = byte_to_rune(source_content_char_indices, byte_span);
+        let rune_span = match source_content_char_indices {
+            Some(indices) => byte_to_rune(
+                indices.get_or_init(|| char_indices_of(source_content)),
+                byte_span,
+            ),
+            None => byte_to_rune(&[], byte_span),
+        };
 
         (source_content, source_id_str, byte_span, rune_span)
     }
@@ -725,9 +729,34 @@ fn trimmed_span(source: &str, span: Span) -> Span {
     trimmed
 }
 
+fn char_indices_of(content: &str) -> Vec<usize> {
+    content.char_indices().map(|(i, _)| i).collect()
+}
+
 fn byte_to_rune(char_indices: &[usize], byte_span: Span) -> Span {
     let mut rune_span = byte_span;
     rune_span.start = char_indices.partition_point(|&i| i < byte_span.start);
     rune_span.end = char_indices.partition_point(|&i| i < byte_span.end);
     rune_span
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::BeancountParser;
+
+    // The character positions of an error come from an index built when first asked for.
+    #[test]
+    fn error_lines_count_characters_after_multibyte_text() {
+        let sources = BeancountSources::from(
+            "2020-01-01 * \"Café — crème\"\n  Assets:Cash  1 EUR\n  Expenses:Food\n\n2020-01-02 bogus\n",
+        );
+        let Err(failure) = BeancountParser::new(&sources).parse() else {
+            panic!("the text has an error");
+        };
+        let error = failure.errors.first().expect("an error");
+        let resolved = sources.resolve_span(&error.span());
+        assert_eq!(resolved.start_line, 5);
+        assert_eq!(resolved.content, "bogus");
+    }
 }
