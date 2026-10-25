@@ -662,7 +662,7 @@ where
                 expr_value().map_with(spanned_extra).or_not(),
                 currency().map_with(spanned_extra).or_not(),
                 cost_spec().or_not().map_with(|cost_spec, e| {
-                    cost_spec.map(|cost_spec| spanned_(cost_spec, e.span()))
+                    cost_spec.map(|cost_spec| Box::new(spanned_(cost_spec, e.span())))
                 }),
                 price_annotation().or_not().map_with(|price_spec, e| {
                     price_spec.map(|price_spec| spanned_(price_spec, e.span()))
@@ -719,7 +719,7 @@ where
                         let MetaKeyValue { key, value } = kv.item;
 
                         let key_span = key.span;
-                        match m.key_values.entry(key) {
+                        match m.parts_mut().key_values.entry(key) {
                             Occupied(entry) => emitter.emit(Rich::custom(
                                 key_span.into(),
                                 format!("duplicate key {}", entry.key()),
@@ -732,25 +732,25 @@ where
                         m
                     }
                     Tag(tag) => {
-                        if m.tags.contains(&tag) {
+                        if m.parts().tags.contains(&tag) {
                             emitter.emit(Rich::custom(
                                 tag.span.into(),
                                 format!("duplicate tag {}", tag),
                             ))
                         } else {
-                            m.tags.insert(tag);
+                            m.parts_mut().tags.insert(tag);
                         }
 
                         m
                     }
                     Link(link) => {
-                        if m.links.contains(&link) {
+                        if m.parts().links.contains(&link) {
                             emitter.emit(Rich::custom(
                                 link.span.into(),
                                 format!("duplicate link {}", link),
                             ))
                         } else {
-                            m.links.insert(link);
+                            m.parts_mut().links.insert(link);
                         }
 
                         m
@@ -1237,9 +1237,9 @@ impl<'a> Metadata<'a> {
         E: Emit<ParserError<'a>>,
     {
         for tag in tags {
-            match self.tags.get(tag) {
+            match self.parts().tags.get(tag) {
                 None => {
-                    self.tags.insert(*tag);
+                    self.parts_mut().tags.insert(*tag);
                 }
                 Some(existing_tag) => {
                     let error =
@@ -1262,9 +1262,9 @@ impl<'a> Metadata<'a> {
     // This is so that tags attached to directives take precedence over the push stack.
     pub(crate) fn augment_tags(&mut self, tags: &HashMap<Spanned<Tag<'a>>, Vec<Spanned<Tag<'a>>>>) {
         for (tag, spans) in tags.iter() {
-            if !self.tags.contains(tag) {
+            if !self.parts().tags.contains(tag) {
                 let most_recently_pushed_tag = spans.last().unwrap_or(tag);
-                self.tags.insert(*most_recently_pushed_tag);
+                self.parts_mut().tags.insert(*most_recently_pushed_tag);
             }
         }
     }
@@ -1274,9 +1274,9 @@ impl<'a> Metadata<'a> {
         E: Emit<ParserError<'a>>,
     {
         for link in links {
-            match self.links.get(link) {
+            match self.parts().links.get(link) {
                 None => {
-                    self.links.insert(*link);
+                    self.parts_mut().links.insert(*link);
                 }
                 Some(existing_link) => {
                     let error = Rich::custom(
@@ -1304,9 +1304,9 @@ impl<'a> Metadata<'a> {
         key_values: &HashMap<Spanned<Key<'a>>, Vec<(Span, Spanned<MetaValue<'a>>)>>,
     ) {
         for (key, values) in key_values {
-            if !self.key_values.contains_key(key) {
+            if !self.parts().key_values.contains_key(key) {
                 let (key_span, value) = values.last().unwrap();
-                self.key_values.insert(
+                self.parts_mut().key_values.insert(
                     spanned(*key.item(), *key_span),
                     // Sadly we do have to clone the value here, so we can
                     // merge in metadata key/values from the push/pop stack

@@ -58,8 +58,8 @@ fn test_transaction(
     assert!(result.is_ok());
     let result = result.unwrap();
     assert_eq!(&result.date, &expected_date);
-    assert_eq!(&result.metadata.tags, &expected_tags);
-    assert_eq!(&result.metadata.links, &expected_links);
+    assert_eq!(&result.metadata.parts().tags, &expected_tags);
+    assert_eq!(&result.metadata.parts().links, &expected_links);
     assert!(
         matches!(&result.variant, DirectiveVariant::Transaction(x) if
             x.flag == expected_flag &&

@@ -12,6 +12,7 @@ use std::{
     iter::empty,
     mem::swap,
     ops::Deref,
+    sync::OnceLock,
 };
 use std::{marker::PhantomData, ops::DerefMut};
 use strum_macros::{Display, EnumIter, EnumString, IntoStaticStr};
@@ -1731,7 +1732,8 @@ pub struct Posting<'a> {
     pub(crate) account: Spanned<Account<'a>>,
     pub(crate) amount: Option<Spanned<ExprValue>>,
     pub(crate) currency: Option<Spanned<Currency<'a>>>,
-    pub(crate) cost_spec: Option<Spanned<CostSpec<'a>>>,
+    // boxed: a cost is rare, and its room in every posting is 248 bytes
+    pub(crate) cost_spec: Option<Box<Spanned<CostSpec<'a>>>>,
     pub(crate) price_annotation: Option<Spanned<PriceSpec<'a>>>,
     pub(crate) metadata: Spanned<Metadata<'a>>,
 }
@@ -1759,7 +1761,7 @@ impl<'a> Posting<'a> {
 
     /// Field accessor.
     pub fn cost_spec(&self) -> Option<&Spanned<CostSpec<'a>>> {
-        self.cost_spec.as_ref()
+        self.cost_spec.as_deref()
     }
 
     /// Field accessor.
@@ -1803,14 +1805,43 @@ impl Display for Posting<'_> {
 ///
 /// Note that tags and links and key/values that may have been specified at the top-level
 /// of a directive are subsumed into the metadata element of the directive.
-#[derive(PartialEq, Eq, Clone, Default, Debug)]
+#[derive(Clone, Default, Debug)]
 pub struct Metadata<'a> {
+    // Most postings and many directives have none, and the three empty collections would
+    // take 144 bytes of each, so they are only allocated for the first piece of metadata.
+    parts: Option<Box<MetadataParts<'a>>>,
+}
+
+#[derive(PartialEq, Eq, Clone, Default, Debug)]
+pub(crate) struct MetadataParts<'a> {
     pub(crate) key_values: HashMap<Spanned<Key<'a>>, Spanned<MetaValue<'a>>>,
     pub(crate) tags: HashSet<Spanned<Tag<'a>>>,
     pub(crate) links: HashSet<Spanned<Link<'a>>>,
 }
 
+impl PartialEq for Metadata<'_> {
+    fn eq(&self, other: &Self) -> bool {
+        self.parts() == other.parts()
+    }
+}
+
+impl Eq for Metadata<'_> {}
+
 impl<'a> Metadata<'a> {
+    /// What is held, an empty set when nothing is.
+    pub(crate) fn parts(&self) -> &MetadataParts<'a> {
+        static EMPTY: OnceLock<MetadataParts<'static>> = OnceLock::new();
+
+        match &self.parts {
+            Some(parts) => parts,
+            None => EMPTY.get_or_init(MetadataParts::default),
+        }
+    }
+
+    pub(crate) fn parts_mut(&mut self) -> &mut MetadataParts<'a> {
+        self.parts.get_or_insert_with(Box::default)
+    }
+
     /// is the metadata empty?
     pub fn is_empty(&self) -> bool {
         self.key_values().len() == 0 && self.tags().len() == 0 && self.links().len() == 0
@@ -1820,7 +1851,7 @@ impl<'a> Metadata<'a> {
     pub fn key_values(
         &self,
     ) -> impl ExactSizeIterator<Item = (&Spanned<Key<'a>>, &Spanned<MetaValue<'a>>)> {
-        self.key_values.iter()
+        self.parts().key_values.iter()
     }
 
     /// Field accessor.
@@ -1830,39 +1861,39 @@ impl<'a> Metadata<'a> {
     {
         // this is a bit gross because we don't have a span,
         // so we cheat and use any span we know, which is OK because it doesn't matter
-        match self.key_values.keys().next() {
+        match self.parts().key_values.keys().next() {
             None => None,
             Some(arbitrary_spanned_key) => {
                 let key = spanned(key, *arbitrary_spanned_key.span());
-                self.key_values.get(&key)
+                self.parts().key_values.get(&key)
             }
         }
     }
 
     /// Field accessor.
     pub fn tags(&self) -> impl ExactSizeIterator<Item = &Spanned<Tag<'a>>> {
-        self.tags.iter()
+        self.parts().tags.iter()
     }
 
     /// Field accessor.
     pub fn links(&self) -> impl ExactSizeIterator<Item = &Spanned<Link<'a>>> {
-        self.links.iter()
+        self.parts().links.iter()
     }
 
     pub(crate) fn fmt_tags_links_inline(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        format(f, &self.tags, plain, SPACE, Some(SPACE))?;
-        format(f, &self.links, plain, SPACE, Some(SPACE))
+        format(f, &self.parts().tags, plain, SPACE, Some(SPACE))?;
+        format(f, &self.parts().links, plain, SPACE, Some(SPACE))
     }
 
     pub(crate) fn fmt_tags_links_on_separate_lines(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        format(f, &self.tags, plain, NEWLINE_INDENT, Some(NEWLINE_INDENT))?;
-        format(f, &self.links, plain, NEWLINE_INDENT, Some(NEWLINE_INDENT))
+        format(f, &self.parts().tags, plain, NEWLINE_INDENT, Some(NEWLINE_INDENT))?;
+        format(f, &self.parts().links, plain, NEWLINE_INDENT, Some(NEWLINE_INDENT))
     }
 
     pub(crate) fn fmt_keys_values(&self, f: &mut Formatter<'_>) -> fmt::Result {
         format(
             f,
-            &self.key_values,
+            &self.parts().key_values,
             key_value,
             NEWLINE_INDENT,
             Some(NEWLINE_INDENT),
@@ -1872,8 +1903,8 @@ impl<'a> Metadata<'a> {
 
 impl Display for Metadata<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        format(f, &self.tags, plain, NEWLINE_INDENT, Some(NEWLINE_INDENT))?;
-        format(f, &self.links, plain, NEWLINE_INDENT, Some(NEWLINE_INDENT))?;
+        format(f, &self.parts().tags, plain, NEWLINE_INDENT, Some(NEWLINE_INDENT))?;
+        format(f, &self.parts().links, plain, NEWLINE_INDENT, Some(NEWLINE_INDENT))?;
         self.fmt_keys_values(f)
     }
 }
