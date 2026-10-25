@@ -66,32 +66,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c08606f8c3cbf4ce6ec8e28fb0014a2c086708fe954eaa885384a6165172e7e8"
 
 [[package]]
-name = "beancount-parser-lima"
-version = "0.16.3"
-dependencies = [
- "ariadne",
- "chumsky",
- "derive_more",
- "either",
- "glob",
- "itertools",
- "lazy_format",
- "logos",
- "proptest",
- "regex",
- "rstest",
- "rust_decimal",
- "rust_decimal_macros",
- "stats_alloc",
- "strum",
- "strum_macros",
- "test-case",
- "time",
- "unescaper",
- "xflags",
-]
-
-[[package]]
 name = "bit-set"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -481,6 +455,32 @@ name = "leb128fmt"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "09edd9e8b54e49e587e4f6295a7d29c3ea94d469cb40ab8ca70b288248a81db2"
+
+[[package]]
+name = "ledgermill-beancount-parser"
+version = "0.16.3"
+dependencies = [
+ "ariadne",
+ "chumsky",
+ "derive_more",
+ "either",
+ "glob",
+ "itertools",
+ "lazy_format",
+ "logos",
+ "proptest",
+ "regex",
+ "rstest",
+ "rust_decimal",
+ "rust_decimal_macros",
+ "stats_alloc",
+ "strum",
+ "strum_macros",
+ "test-case",
+ "time",
+ "unescaper",
+ "xflags",
+]
 
 [[package]]
 name = "libc"

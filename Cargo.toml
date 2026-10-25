@@ -1,13 +1,17 @@
 [package]
-name = "beancount-parser-lima"
+name = "ledgermill-beancount-parser"
 version = "0.16.3"
 edition = "2021"
 license = "MIT OR Apache-2.0"
-description = "A zero-copy parser for Beancount"
-homepage = "https://github.com/tesujimath/beancount-parser-lima"
-repository = "https://github.com/tesujimath/beancount-parser-lima"
+description = "A zero-copy parser for Beancount: a fork of beancount-parser-lima without its GPL files, published for ledgermill"
+homepage = "https://github.com/srod/beancount-parser-lima"
+repository = "https://github.com/srod/beancount-parser-lima"
 readme = "README.md"
 exclude = ["/examples/images/*"]
+
+# Keep the upstream crate name in code, so the fork differs from upstream only here.
+[lib]
+name = "beancount_parser_lima"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

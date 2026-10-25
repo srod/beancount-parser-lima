@@ -1,5 +1,11 @@
 # beancount-parser-lima
 
+> **This is a fork**, published on crates.io as `ledgermill-beancount-parser` for
+> [ledgermill](https://github.com/srod/ledgermill). It is upstream
+> [beancount-parser-lima](https://github.com/tesujimath/beancount-parser-lima) without the GPLv2
+> protobuf files and the tests derived from them; the code is otherwise unchanged. Use upstream
+> unless you need a crate with no GPL files in it. Issues with the parser itself belong upstream.
+
 A zero-copy parser for Beancount in Rust.
 
 It is intended to be a complete implementation of the Beancount file format, except for those parts which are deprecated and other features as documented here (in a list which may not be comprehensive).
