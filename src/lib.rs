@@ -275,6 +275,19 @@ impl<'s> BeancountParser<'s> {
     /// Parse the sources, returning declarations and any errors.
     /// The declarations are indexed by SourceId
     fn parse_declarations<'a>(&'a self) -> ParseDeclarationsResult<'a> {
+        // Cheap errors first (see `parsers::ParserError`); the messages only if there are errors.
+        let cheap = {
+            let _cheap = parsers::CheapErrors::new();
+            self.parse_declarations_once()
+        };
+        if cheap.2.is_empty() {
+            return cheap;
+        }
+        drop(cheap);
+        self.parse_declarations_once()
+    }
+
+    fn parse_declarations_once<'a>(&'a self) -> ParseDeclarationsResult<'a> {
         let mut all_outputs = HashMap::new();
         let mut all_errors = Vec::new();
         let mut parser_state = chumsky::extra::SimpleState(ParserState::default());

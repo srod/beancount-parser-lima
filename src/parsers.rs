@@ -143,15 +143,15 @@ where
 
             let opt = BeancountOption::parse(name, value, source_path)
                 .map_err(|e| match e {
-                    UnknownOption => Rich::custom(name.span.into(), e.to_string()),
-                    BadValue(_) => Rich::custom(value.span.into(), e.to_string()),
+                    UnknownOption => ParserError::custom(name.span.into(), e.to_string()),
+                    BadValue(_) => ParserError::custom(value.span.into(), e.to_string()),
                 })
                 .and_then(|opt| {
                     let parser_state: &mut extra::SimpleState<ParserState> = e.state();
                     parser_state
                         .options
                         .assimilate(opt)
-                        .map_err(|e| Rich::custom(value.span.into(), e.to_string()))
+                        .map_err(|e| ParserError::custom(value.span.into(), e.to_string()))
                 });
 
             opt.unwrap_or_else(|e| {
@@ -366,7 +366,7 @@ where
             .into_iter()
             .fold(HashSet::new(), |mut currencies, currency| {
                 if currencies.contains(&currency) {
-                    emitter.emit(Rich::custom(
+                    emitter.emit(ParserError::custom(
                         currency.span.into(),
                         format!("duplicate currency {}", currency),
                     ))
@@ -395,7 +395,7 @@ where
         let parser_state: &mut extra::SimpleState<ParserState> = e.state();
         let account_type_names = &parser_state.options.account_type_names;
 
-        Account::new(s, account_type_names).map_err(|e| Rich::custom(span, e.to_string()))
+        Account::new(s, account_type_names).map_err(|e| ParserError::custom(span, e.to_string()))
     })
 }
 
@@ -404,7 +404,7 @@ fn booking<'s, I>() -> impl Parser<'s, I, Booking, Extra<'s>>
 where
     I: BorrowInput<'s, Token = Token<'s>, Span = Span_>,
 {
-    string().try_map(|s, span| Booking::try_from(s).map_err(|e| Rich::custom(span, e.to_string())))
+    string().try_map(|s, span| Booking::try_from(s).map_err(|e| ParserError::custom(span, e.to_string())))
 }
 
 /// Matches a close, including metadata, over several lines.
@@ -720,7 +720,7 @@ where
 
                         let key_span = key.span;
                         match m.parts_mut().key_values.entry(key) {
-                            Occupied(entry) => emitter.emit(Rich::custom(
+                            Occupied(entry) => emitter.emit(ParserError::custom(
                                 key_span.into(),
                                 format!("duplicate key {}", entry.key()),
                             )),
@@ -733,7 +733,7 @@ where
                     }
                     Tag(tag) => {
                         if m.parts().tags.contains(&tag) {
-                            emitter.emit(Rich::custom(
+                            emitter.emit(ParserError::custom(
                                 tag.span.into(),
                                 format!("duplicate tag {}", tag),
                             ))
@@ -745,7 +745,7 @@ where
                     }
                     Link(link) => {
                         if m.parts().links.contains(&link) {
-                            emitter.emit(Rich::custom(
+                            emitter.emit(ParserError::custom(
                                 link.span.into(),
                                 format!("duplicate link {}", link),
                             ))
@@ -994,7 +994,7 @@ where
             };
             builder
                 .build()
-                .map_err(|e| Rich::custom(span, e.to_string()))
+                .map_err(|e| ParserError::custom(span, e.to_string()))
         })
 }
 
@@ -1042,7 +1042,7 @@ where
             |(mut tags, mut links), item| match item {
                 Either::Left(tag) => {
                     if tags.contains(&tag) {
-                        emitter.emit(Rich::custom(
+                        emitter.emit(ParserError::custom(
                             tag.span.into(),
                             format!("duplicate tag {}", tag),
                         ))
@@ -1054,7 +1054,7 @@ where
                 }
                 Either::Right(link) => {
                     if links.contains(&link) {
-                        emitter.emit(Rich::custom(
+                        emitter.emit(ParserError::custom(
                             link.span.into(),
                             format!("duplicate link {}", link),
                         ))
@@ -1144,7 +1144,7 @@ where
     I: BorrowInput<'s, Token = Token<'s>, Span = Span_>,
 {
     let tag = select_ref!(Token::Tag(s) => *s);
-    tag.try_map(|s, span| Tag::try_from(s).map_err(|e| Rich::custom(span, e.to_string())))
+    tag.try_map(|s, span| Tag::try_from(s).map_err(|e| ParserError::custom(span, e.to_string())))
 }
 
 /// Matches a Link
@@ -1153,7 +1153,7 @@ where
     I: BorrowInput<'s, Token = Token<'s>, Span = Span_>,
 {
     let link = select_ref!(Token::Link(s) => *s);
-    link.try_map(|s, span| Link::try_from(s).map_err(|e| Rich::custom(span, e.to_string())))
+    link.try_map(|s, span| Link::try_from(s).map_err(|e| ParserError::custom(span, e.to_string())))
 }
 
 /// Matches a Key.
@@ -1165,7 +1165,7 @@ where
 {
     let key = select_ref!(Token::Key(s) => *s);
 
-    key.try_map(|s, span| Key::try_from(s).map_err(|e| Rich::custom(span, e.to_string())))
+    key.try_map(|s, span| Key::try_from(s).map_err(|e| ParserError::custom(span, e.to_string())))
 }
 
 /// Matches a Currency
@@ -1174,7 +1174,7 @@ where
     I: BorrowInput<'s, Token = Token<'s>, Span = Span_>,
 {
     let currency = select_ref!(Token::Currency(s) => *s);
-    currency.try_map(|s, span| Currency::try_from(s).map_err(|e| Rich::custom(span, e.to_string())))
+    currency.try_map(|s, span| Currency::try_from(s).map_err(|e| ParserError::custom(span, e.to_string())))
 }
 
 /// Matches a Date
@@ -1243,7 +1243,7 @@ impl<'a> Metadata<'a> {
                 }
                 Some(existing_tag) => {
                     let error =
-                        Rich::custom(existing_tag.span.into(), format!("duplicate tag {}", tag));
+                        ParserError::custom(existing_tag.span.into(), format!("duplicate tag {}", tag));
                     // TODO: label the error in context, type annotations need fixing for chumsky 1.0.0-alpha7 to alpha8 transition
                     // LabelError::<
                     //     chumsky::input::WithContext<
@@ -1279,7 +1279,7 @@ impl<'a> Metadata<'a> {
                     self.parts_mut().links.insert(*link);
                 }
                 Some(existing_link) => {
-                    let error = Rich::custom(
+                    let error = ParserError::custom(
                         existing_link.span.into(),
                         format!("duplicate link {}", link),
                     );
@@ -1318,10 +1318,141 @@ impl<'a> Metadata<'a> {
     }
 }
 
-type ParserError<'a> = Rich<'a, Token<'a>, Span_>;
+/// The parser's error: chumsky's `Rich` when messages are wanted, else only the span.
+///
+/// Building a `Rich` error records every token the parser expected at each failed alternative,
+/// even in a file that parses: about a fifth of the parse. So a file is parsed first with the
+/// cheap error, and only parsed again with `Rich` when that finds an error. What an error holds
+/// never changes the parse, so the output of a file without errors is the same.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) enum ParserError<'a> {
+    Rich(Rich<'a, Token<'a>, Span_>),
+    Cheap(Span_),
+}
+
+thread_local! {
+    static DETAILED: std::cell::Cell<bool> = const { std::cell::Cell::new(true) };
+}
+
+fn detailed() -> bool {
+    DETAILED.with(|d| d.get())
+}
+
+/// Builds cheap errors until dropped.
+pub(crate) struct CheapErrors(bool);
+
+impl CheapErrors {
+    pub(crate) fn new() -> Self {
+        CheapErrors(DETAILED.with(|d| d.replace(false)))
+    }
+}
+
+impl Drop for CheapErrors {
+    fn drop(&mut self) {
+        DETAILED.with(|d| d.set(self.0));
+    }
+}
+
+impl<'a> ParserError<'a> {
+    pub(crate) fn custom<M: ToString>(span: Span_, msg: M) -> Self {
+        if detailed() {
+            ParserError::Rich(Rich::custom(span, msg))
+        } else {
+            ParserError::Cheap(span)
+        }
+    }
+}
+
+impl<'a, I> chumsky::error::Error<'a, I> for ParserError<'a>
+where
+    I: chumsky::input::Input<'a, Token = Token<'a>, Span = Span_>,
+{
+    #[inline]
+    fn merge(self, other: Self) -> Self {
+        match (self, other) {
+            (ParserError::Rich(a), ParserError::Rich(b)) => {
+                ParserError::Rich(chumsky::error::Error::<'a, I>::merge(a, b))
+            }
+            (a, _) => a,
+        }
+    }
+}
+
+impl<'a, I, L> chumsky::label::LabelError<'a, I, L> for ParserError<'a>
+where
+    I: chumsky::input::Input<'a, Token = Token<'a>, Span = Span_>,
+    L: Into<chumsky::error::RichPattern<'a, Token<'a>>>,
+{
+    #[inline]
+    fn expected_found<E: IntoIterator<Item = L>>(
+        expected: E,
+        found: Option<chumsky::util::MaybeRef<'a, Token<'a>>>,
+        span: Span_,
+    ) -> Self {
+        if detailed() {
+            ParserError::Rich(chumsky::label::LabelError::<'a, I, L>::expected_found(
+                expected, found, span,
+            ))
+        } else {
+            ParserError::Cheap(span)
+        }
+    }
+
+    #[inline]
+    fn merge_expected_found<E: IntoIterator<Item = L>>(
+        self,
+        expected: E,
+        found: Option<chumsky::util::MaybeRef<'a, Token<'a>>>,
+        span: Span_,
+    ) -> Self {
+        match self {
+            ParserError::Rich(r) => ParserError::Rich(
+                chumsky::label::LabelError::<'a, I, L>::merge_expected_found(
+                    r, expected, found, span,
+                ),
+            ),
+            cheap => cheap,
+        }
+    }
+
+    #[inline]
+    fn replace_expected_found<E: IntoIterator<Item = L>>(
+        self,
+        expected: E,
+        found: Option<chumsky::util::MaybeRef<'a, Token<'a>>>,
+        span: Span_,
+    ) -> Self {
+        match self {
+            ParserError::Rich(r) => ParserError::Rich(
+                chumsky::label::LabelError::<'a, I, L>::replace_expected_found(
+                    r, expected, found, span,
+                ),
+            ),
+            ParserError::Cheap(_) => ParserError::Cheap(span),
+        }
+    }
+
+    #[inline]
+    fn label_with(&mut self, label: L) {
+        if let ParserError::Rich(r) = self {
+            chumsky::label::LabelError::<'a, I, L>::label_with(r, label);
+        }
+    }
+
+    #[inline]
+    fn in_context(&mut self, label: L, span: Span_) {
+        if let ParserError::Rich(r) = self {
+            chumsky::label::LabelError::<'a, I, L>::in_context(r, label, span);
+        }
+    }
+}
 
 impl From<ParserError<'_>> for Error {
     fn from(error: ParserError) -> Self {
+        let error = match error {
+            ParserError::Rich(error) => error,
+            ParserError::Cheap(span) => Rich::custom(span, "error"),
+        };
         let error = error.map_token(|tok| tok.to_string());
 
         Error::new(
