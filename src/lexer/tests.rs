@@ -345,6 +345,15 @@ fn bad_date_valid_but_invalid() {
 }
 
 #[test]
+fn non_ascii_digits_in_a_date_or_time_are_an_error_not_a_panic() {
+    // `\d` matches any Unicode digit, which integer parsing refuses.
+    lex_and_check("\n٢٠٢٦-01-01\n", vec![error("invalid digit"), Eol]);
+    // A failed time is lexed again by the recovery lexer, as numbers.
+    let bad_decimal = || error("Invalid decimal: unknown character");
+    lex_and_check("\n١:٢٣\n", vec![bad_decimal(), Colon, bad_decimal(), Eol]);
+}
+
+#[test]
 fn date_followed_by_number() {
     lex_and_check(
         r#"

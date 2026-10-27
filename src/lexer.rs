@@ -669,24 +669,30 @@ trait EolIndentHandlerIteratorAdaptor<'a>: Iterator<Item = RangedToken<'a>> + Si
 
 impl<'a, I: Iterator<Item = RangedToken<'a>>> EolIndentHandlerIteratorAdaptor<'a> for I {}
 
+// The `\d` of the date and time patterns matches any Unicode digit, which `parse` refuses, so a
+// part that doesn't parse is a lexer error, not a panic.
+fn parse_part<T: FromStr>(part: Option<&str>) -> Result<T, LexerError> {
+    part.and_then(|p| p.parse().ok())
+        .ok_or_else(|| LexerError::new("invalid digit"))
+}
+
 fn parse_date(s: &str) -> Result<Date, LexerError> {
     let mut date = s.split(&['-', '/']);
-    let year = date.by_ref().next().unwrap().parse::<i32>().unwrap();
-    let month = date.by_ref().next().unwrap().parse::<u8>().unwrap();
+    let year = parse_part::<i32>(date.next())?;
+    let month = parse_part::<u8>(date.next())?;
     let month = Month::try_from(month).or(Err(LexerError::new("month out of range")))?;
-    let day = date.by_ref().next().unwrap().parse::<u8>().unwrap();
+    let day = parse_part::<u8>(date.next())?;
     Date::from_calendar_date(year, month, day).or(Err(LexerError::new("date out of range")))
 }
 
 fn parse_time(s: &str) -> Result<Time, LexerError> {
     let mut time = s.split(':');
-    let hour = time.by_ref().next().unwrap().parse::<u8>().unwrap();
-    let min = time.by_ref().next().unwrap().parse::<u8>().unwrap();
-    let sec = time
-        .by_ref()
-        .next()
-        .map(|s| s.parse::<u8>().unwrap())
-        .unwrap_or(0);
+    let hour = parse_part::<u8>(time.next())?;
+    let min = parse_part::<u8>(time.next())?;
+    let sec = match time.next() {
+        Some(sec) => parse_part::<u8>(Some(sec))?,
+        None => 0,
+    };
 
     Time::from_hms(hour, min, sec).or(Err(LexerError::new("time out of range")))
 }

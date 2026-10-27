@@ -1,6 +1,6 @@
 [package]
 name = "ledgermill-beancount-parser"
-version = "0.16.3"
+version = "0.16.4"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 description = "A zero-copy parser for Beancount: a fork of beancount-parser-lima without its GPL files, published for ledgermill"
